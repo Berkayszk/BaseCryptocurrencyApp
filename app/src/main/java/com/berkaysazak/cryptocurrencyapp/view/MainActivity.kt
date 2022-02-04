@@ -15,6 +15,7 @@ import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
 import kotlinx.android.synthetic.main.activity_main.*
+import kotlinx.coroutines.*
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -26,20 +27,28 @@ class MainActivity : AppCompatActivity(), RecyclerViewAdapter.Listener {
     private val BASE_URL = "https://raw.githubusercontent.com/"
     private var cryptoModels : ArrayList<CryptoModel>? = null
     private var recyclerViewAdapter : RecyclerViewAdapter? = null
+    private var job : Job? = null
 
     //Disposable
     private var compositeDisposable : CompositeDisposable? = null
 
+    val exceptionHandler = CoroutineExceptionHandler { coroutineContext, throwable ->
+        println("Error = ${throwable.localizedMessage}")
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+
 
         //RecyclerView
 
         val layoutManager : RecyclerView.LayoutManager = LinearLayoutManager(this)
         recyclerView.layoutManager = layoutManager
 
-        compositeDisposable = CompositeDisposable()
+        //compositeDisposable = CompositeDisposable()
+
 
         loadData()
 
@@ -51,10 +60,25 @@ class MainActivity : AppCompatActivity(), RecyclerViewAdapter.Listener {
             .addConverterFactory(GsonConverterFactory.create())
             .addCallAdapterFactory(RxJava2CallAdapterFactory.create())
             .build().create(CryptoAPI::class.java) // service
-            compositeDisposable?.add(retrofit.getData()
+        /*
+        compositeDisposable?.add(retrofit.getData()
                 .subscribeOn(Schedulers.io()) //background
                 .observeOn(AndroidSchedulers.mainThread()) //foreground
                 .subscribe(this::handlerResponse))
+
+         */
+        job = CoroutineScope(Dispatchers.IO).launch{
+            val response = retrofit.getData()
+
+            withContext(Dispatchers.Main + exceptionHandler){
+
+                cryptoModels = ArrayList(cryptoModels)
+                cryptoModels?.let {
+                    recyclerViewAdapter = RecyclerViewAdapter(it,this@MainActivity)
+                    recyclerView.adapter = recyclerViewAdapter
+                }
+            }
+        }
 
         /* val service = retrofit.create(CryptoAPI::class.java)
         val call = service.getData()
@@ -92,14 +116,17 @@ class MainActivity : AppCompatActivity(), RecyclerViewAdapter.Listener {
 
          */
     }
+    /*
     private fun handlerResponse(cryptoList: List<CryptoModel>){
-        cryptoModels = ArrayList(cryptoList)
 
+        cryptoModels = ArrayList(cryptoList)
         cryptoModels?.let {
             recyclerViewAdapter = RecyclerViewAdapter(it,this@MainActivity)
             recyclerView.adapter = recyclerViewAdapter
         }
     }
+
+     */
 
     override fun onItemClick(cryptoModel: CryptoModel) {
         Toast.makeText(this,"Clicked : ${cryptoModel.currency}",Toast.LENGTH_SHORT).show()
@@ -107,6 +134,6 @@ class MainActivity : AppCompatActivity(), RecyclerViewAdapter.Listener {
 
     override fun onDestroy() {
         super.onDestroy()
-        compositeDisposable?.clear()
+        //compositeDisposable?.clear()
     }
 }
